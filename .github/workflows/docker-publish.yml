@@ -6,17 +6,12 @@ on:
   workflow_call:
     secrets:
       GCR_PROJECT:
-        required: true
+        required: false
       GCR_SA_KEY:
-        required: true
+        required: false
 
 env:
   PROJECT_ID: ${{ secrets.GCR_PROJECT }}
-  RUST_BACKTRACE: full
-  RUSTC_WRAPPER: sccache
-  RUSTV: ${{ matrix.rust }}
-  SCCACHE_CACHE_SIZE: 8G
-  SCCACHE_DIR: /home/runner/.cache/sccache
 
 jobs:
   build:
