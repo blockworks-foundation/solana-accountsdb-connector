@@ -1,3 +1,4 @@
+# syntax = docker/dockerfile:1.2
 # Base image containing all binaries, deployed to gcr.io/mango-markets/mango-services:latest
 FROM rust:1.59 as build
 ENV HOME=/home/root
@@ -15,11 +16,7 @@ RUN rustup component add rustfmt
 WORKDIR $HOME/app
 COPY ./ .
 
-# Change this line to force docker recompilation from this step on.
-# This will hit sccache the second time.
-RUN echo 1
-
-RUN --mount=type=cache,target=$HOME/.cache/sccache cargo build --release && sccache --show-stats
+RUN --mount=type=cache,target=$HOME/.cache/sccache cargo build --release
 RUN mkdir .bin && cp target/release/service-mango-pnl target/release/service-mango-fills .bin/
 
 FROM debian:bullseye-slim as run
