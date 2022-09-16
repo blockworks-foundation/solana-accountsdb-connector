@@ -18,7 +18,3 @@ COPY ./ .
 
 RUN --mount=type=cache,target=$HOME/.cache/sccache cargo build --release
 RUN mkdir .bin && cp target/release/service-mango-pnl target/release/service-mango-fills .bin/
-
-FROM debian:bullseye-slim as run
-RUN apt-get update && apt-get -y install ca-certificates libc6
-COPY --from=build /home/root/app/.bin/* /usr/local/bin/
