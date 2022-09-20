@@ -11,7 +11,7 @@ use futures::{future, future::FutureExt};
 use tonic::transport::{Certificate, ClientTlsConfig, Endpoint, Identity};
 
 use log::*;
-use std::{collections::HashMap, str::FromStr, time::Duration, env};
+use std::{collections::HashMap, env, str::FromStr, time::Duration};
 
 pub mod geyser_proto {
     tonic::include_proto!("accountsdb");
@@ -72,12 +72,14 @@ async fn feed_data_geyser(
 ) -> anyhow::Result<()> {
     let program_id = Pubkey::from_str(&snapshot_config.program_id)?;
     let connection_string = match &grpc_config.connection_string.chars().next().unwrap() {
-        '$' => env::var(&grpc_config.connection_string[1..]).expect("reading connection string from env"),
-        _ => grpc_config.connection_string.clone()
+        '$' => env::var(&grpc_config.connection_string[1..])
+            .expect("reading connection string from env"),
+        _ => grpc_config.connection_string.clone(),
     };
     let rpc_http_url = match &snapshot_config.rpc_http_url.chars().next().unwrap() {
-        '$' => env::var(&snapshot_config.rpc_http_url[1..]).expect("reading connection string from env"),
-        _ => snapshot_config.rpc_http_url.clone()
+        '$' => env::var(&snapshot_config.rpc_http_url[1..])
+            .expect("reading connection string from env"),
+        _ => snapshot_config.rpc_http_url.clone(),
     };
     let endpoint = Endpoint::from_str(&connection_string)?;
     let channel = if let Some(tls) = tls_config {
@@ -241,22 +243,28 @@ async fn feed_data_geyser(
 
 fn make_tls_config(config: &TlsConfig) -> ClientTlsConfig {
     let server_root_ca_cert = match &config.ca_cert_path.chars().next().unwrap() {
-        '$' => env::var(&config.ca_cert_path[1..]).expect("reading server root ca cert from env").into_bytes(),
-        _ => std::fs::read(&config.ca_cert_path).expect("reading server root ca cert from file")
+        '$' => env::var(&config.ca_cert_path[1..])
+            .expect("reading server root ca cert from env")
+            .into_bytes(),
+        _ => std::fs::read(&config.ca_cert_path).expect("reading server root ca cert from file"),
     };
     let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
     let client_cert = match &config.client_cert_path.chars().next().unwrap() {
-        '$' => env::var(&config.client_cert_path[1..]).expect("reading client cert from env").into_bytes(),
-        _ => std::fs::read(&config.client_cert_path).expect("reading client cert from file")
+        '$' => env::var(&config.client_cert_path[1..])
+            .expect("reading client cert from env")
+            .into_bytes(),
+        _ => std::fs::read(&config.client_cert_path).expect("reading client cert from file"),
     };
     let client_key = match &config.client_key_path.chars().next().unwrap() {
-        '$' => env::var(&config.client_key_path[1..]).expect("reading client key from env").into_bytes(),
-        _ => std::fs::read(&config.client_key_path).expect("reading client key from file")
+        '$' => env::var(&config.client_key_path[1..])
+            .expect("reading client key from env")
+            .into_bytes(),
+        _ => std::fs::read(&config.client_key_path).expect("reading client key from file"),
     };
     let client_identity = Identity::from_pem(client_cert, client_key);
     let domain_name = match &config.domain_name.chars().next().unwrap() {
         '$' => env::var(&config.domain_name[1..]).expect("reading domain name from env"),
-        _ => config.domain_name.clone()
+        _ => config.domain_name.clone(),
     };
     ClientTlsConfig::new()
         .ca_certificate(server_root_ca_cert)
