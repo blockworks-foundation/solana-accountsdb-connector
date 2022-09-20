@@ -24,4 +24,4 @@ mango_group = "98pjRuQjK3qA6gXts96PqZT4Ze5QmnCmt3QYjhbUSPue"
 mango_cache = "EBDRoayCDDUvDgCimta45ajQeXbexv7aKqJubruqpyvu"
 
 [jsonrpc_server]
-bind_address = "127.0.0.1:2052"
+bind_address = "0.0.0.0:2052"
