@@ -127,6 +127,11 @@ fn publish_changes(
         // 3) all other events are matching the old event queue
         // the order of these checks is important so they are exhaustive
         if seq_num >= old_seq_num {
+            debug!(
+                "found new event {} idx {} type {}",
+                mkt.name, idx, events[idx].event_type as u32
+            );
+
             metric_events_new.increment();
 
 
@@ -148,6 +153,11 @@ fn publish_changes(
         } else if old_events[idx].event_type != events[idx].event_type
             || old_events[idx].padding != events[idx].padding
         {
+            debug!(
+                "found changed event {} idx {} seq_num {} header seq num {} old seq num {}",
+                mkt.name, idx, seq_num, header.seq_num, old_seq_num
+            );
+
             metric_events_change.increment();
 
             // first revoke old event if a fill
@@ -192,6 +202,11 @@ fn publish_changes(
     // in case queue size shrunk due to a fork we need revoke all previous fills
     for seq_num in header.seq_num..old_seq_num {
         let idx = seq_num % QUEUE_LEN;
+
+        debug!(
+            "found dropped event {} idx {} seq_num {} header seq num {} old seq num {}",
+            mkt.name, idx, seq_num, header.seq_num, old_seq_num
+        );
 
         metric_events_drop.increment();
 
