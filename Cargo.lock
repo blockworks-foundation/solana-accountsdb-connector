@@ -5359,6 +5359,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-geyser-connector-trace"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "log 0.4.17",
+ "serde",
+ "serde_derive",
+ "solana-geyser-connector-lib",
+ "solana-logger",
+ "solana-sdk",
+ "tokio",
+ "toml",
+]
+
+[[package]]
 name = "solana-geyser-plugin-interface"
 version = "1.10.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
