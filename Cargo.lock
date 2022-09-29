@@ -2784,9 +2784,37 @@ dependencies = [
  "enumflags2",
  "fixed",
  "fixed-macro",
- "mango-common",
- "mango-logs",
- "mango-macro",
+ "mango-common 3.0.0 (git+https://github.com/blockworks-foundation/mango-v3?branch=pan/solana-1.10)",
+ "mango-logs 0.1.0 (git+https://github.com/blockworks-foundation/mango-v3?branch=pan/solana-1.10)",
+ "mango-macro 3.0.0 (git+https://github.com/blockworks-foundation/mango-v3?branch=pan/solana-1.10)",
+ "num_enum",
+ "pyth-client",
+ "safe-transmute",
+ "serde",
+ "serum_dex",
+ "solana-program",
+ "spl-token",
+ "static_assertions",
+ "switchboard-program",
+ "switchboard-utils",
+ "thiserror",
+]
+
+[[package]]
+name = "mango"
+version = "3.6.1"
+dependencies = [
+ "anchor-lang",
+ "arrayref",
+ "bincode",
+ "bs58 0.4.0",
+ "bytemuck",
+ "enumflags2",
+ "fixed",
+ "fixed-macro",
+ "mango-common 3.0.0",
+ "mango-logs 0.1.0",
+ "mango-macro 3.0.0",
  "num_enum",
  "pyth-client",
  "safe-transmute",
@@ -2803,10 +2831,26 @@ dependencies = [
 [[package]]
 name = "mango-common"
 version = "3.0.0"
+dependencies = [
+ "bytemuck",
+ "solana-program",
+]
+
+[[package]]
+name = "mango-common"
+version = "3.0.0"
 source = "git+https://github.com/blockworks-foundation/mango-v3?branch=pan/solana-1.10#64892f4ab0837c7fd260956867ee30a1a941d625"
 dependencies = [
  "bytemuck",
  "solana-program",
+]
+
+[[package]]
+name = "mango-logs"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "base64 0.13.0",
 ]
 
 [[package]]
@@ -2821,10 +2865,22 @@ dependencies = [
 [[package]]
 name = "mango-macro"
 version = "3.0.0"
+dependencies = [
+ "bytemuck",
+ "mango-common 3.0.0",
+ "quote 1.0.21",
+ "safe-transmute",
+ "solana-program",
+ "syn 1.0.99",
+]
+
+[[package]]
+name = "mango-macro"
+version = "3.0.0"
 source = "git+https://github.com/blockworks-foundation/mango-v3?branch=pan/solana-1.10#64892f4ab0837c7fd260956867ee30a1a941d625"
 dependencies = [
  "bytemuck",
- "mango-common",
+ "mango-common 3.0.0 (git+https://github.com/blockworks-foundation/mango-v3?branch=pan/solana-1.10)",
  "quote 1.0.21",
  "safe-transmute",
  "solana-program",
@@ -4530,6 +4586,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
+name = "scratch"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrayref",
+ "async-channel",
+ "bytemuck",
+ "log 0.4.17",
+ "mango 3.6.1",
+ "serde",
+ "serde_derive",
+ "solana-geyser-connector-lib",
+ "solana-logger",
+ "solana-sdk",
+ "sqlite",
+ "tokio",
+ "toml",
+]
+
+[[package]]
 name = "scroll"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4751,8 +4827,8 @@ dependencies = [
  "fixed",
  "jsonrpsee",
  "log 0.4.17",
- "mango",
- "mango-common",
+ "mango 3.5.1",
+ "mango-common 3.0.0 (git+https://github.com/blockworks-foundation/mango-v3?branch=pan/solana-1.10)",
  "serde",
  "serde_derive",
  "solana-geyser-connector-lib",
@@ -5278,7 +5354,7 @@ dependencies = [
  "jsonrpc-core 18.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core-client",
  "log 0.4.17",
- "mango",
+ "mango 3.5.1",
  "native-tls",
  "postgres-native-tls",
  "postgres-types",
@@ -5309,8 +5385,8 @@ dependencies = [
  "bs58 0.3.1",
  "fixed",
  "log 0.4.17",
- "mango",
- "mango-common",
+ "mango 3.5.1",
+ "mango-common 3.0.0 (git+https://github.com/blockworks-foundation/mango-v3?branch=pan/solana-1.10)",
  "postgres-types",
  "postgres_query",
  "solana-geyser-connector-lib",
@@ -5354,22 +5430,6 @@ dependencies = [
  "log 0.4.17",
  "solana-geyser-connector-lib",
  "solana-logger",
- "tokio",
- "toml",
-]
-
-[[package]]
-name = "solana-geyser-connector-trace"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-channel",
- "log 0.4.17",
- "serde",
- "serde_derive",
- "solana-geyser-connector-lib",
- "solana-logger",
- "solana-sdk",
  "tokio",
  "toml",
 ]
@@ -6215,6 +6275,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlite"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2df8edd55685048550daaaf2be9024182f3523086cc86f7d50c136e55173e8c"
+dependencies = [
+ "libc",
+ "sqlite3-sys",
+]
+
+[[package]]
+name = "sqlite3-src"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1815a7a02c996eb8e5c64f61fcb6fd9b12e593ce265c512c5853b2513635691"
+dependencies = [
+ "cc",
+ "pkg-config",
+]
+
+[[package]]
+name = "sqlite3-sys"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d47c99824fc55360ba00caf28de0b8a0458369b832e016a64c13af0ad9fbb9ee"
+dependencies = [
+ "libc",
+ "sqlite3-src",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7048,6 +7138,26 @@ checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
  "pin-project",
  "tracing",
+]
+
+[[package]]
+name = "trackoor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrayref",
+ "async-channel",
+ "bytemuck",
+ "itertools 0.10.3",
+ "log 0.4.17",
+ "mango 3.6.1",
+ "serde",
+ "serde_derive",
+ "solana-geyser-connector-lib",
+ "solana-logger",
+ "solana-sdk",
+ "tokio",
+ "toml",
 ]
 
 [[package]]

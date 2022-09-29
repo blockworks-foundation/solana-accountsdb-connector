@@ -1,5 +1,5 @@
 [package]
-name = "solana-geyser-connector-trace"
+name = "trackoor"
 version = "0.1.0"
 authors = ["Maximilian Schneider <max@mango.markets>"]
 edition = "2018"
@@ -15,3 +15,7 @@ async-channel = "1.6"
 serde = "1.0"
 serde_derive = "1.0.130"
 toml = "0.5"
+mango = { path = "../../mango-v3/program" }
+bytemuck = "*"
+arrayref = "*"
+itertools = "*"
