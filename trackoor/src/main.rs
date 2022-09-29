@@ -94,8 +94,6 @@ async fn main() -> anyhow::Result<()> {
 
                     // TODO: Figure out how to run the diff only at the end of each block instead of at every write
 
-                    info!("{:?}", &current_l2_snapshot[0..3]);
-
                     let mut diff: Vec<(i64, i64)> = vec!();
 
                     if let Some(ref previous_l2_snapshot) = trailing_l2_snapshot {
