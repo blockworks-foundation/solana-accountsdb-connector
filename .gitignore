@@ -1,3 +1,5 @@
 /target
 **/*.pem
 **/config.toml
+.idea
+.DS_Store
