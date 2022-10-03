@@ -40,6 +40,8 @@ async fn handle_connection(
     let ws_stream = tokio_tungstenite::accept_async(raw_stream).await?;
     let (mut ws_tx, _ws_rx) = ws_stream.split();
 
+    // TODO: Why publish channel in peer map first?
+
     // 1: publish channel in peer map
     let (chan_tx, chan_rx) = unbounded();
     {
@@ -62,6 +64,7 @@ async fn handle_connection(
     // 3: forward all events from channel to peer socket
     let forward_updates = chan_rx.map(Ok).forward(ws_tx);
     pin_mut!(forward_updates);
+    // TODO: ^ What does pin_mut! do?
     forward_updates.await?;
 
     info!("ws disconnected: {}", &addr);
@@ -140,8 +143,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async move {
         // Let's spawn the handling of each connection in a separate task.
         while let Ok((stream, addr)) = listener.accept().await {
-            tokio::spawn(handle_connection_error(
-                checkpoints.clone(),
+            tokio::spawn(handle_connection_error( checkpoints.clone(),
                 peers.clone(),
                 stream,
                 addr,
