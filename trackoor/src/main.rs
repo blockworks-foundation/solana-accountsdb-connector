@@ -1,27 +1,24 @@
 extern crate core;
 
+use std::env;
 use std::any::Any;
-use std::ops::Div;
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use std::{env};
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
+use std::ops::{Div, Mul};
 use std::sync::{Arc, Mutex};
-
-use futures_util::{future, SinkExt, StreamExt, TryStreamExt, pin_mut};
-use log::info;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use arrayref::array_ref;
 use futures_channel::mpsc::{unbounded, UnboundedSender};
+use futures_util::{future, pin_mut, SinkExt, StreamExt, TryStreamExt};
 use itertools::Itertools;
+use log::info;
 use mango::matching::{AnyNode, BookSide, LeafNode, NodeHandle};
 use mango::queue::{AnyEvent, EventQueueHeader, EventType, FillEvent};
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::tungstenite::{protocol::Message, Error};
-
+use tokio_tungstenite::tungstenite::{Error, protocol::Message};
 
 use {
     log::*,
@@ -31,29 +28,27 @@ use {
     std::{fs::File, io::Read, mem::size_of, str::FromStr},
 };
 
-
 #[derive(Clone, Debug, Deserialize)]
-pub struct MarketConfig {
-    pub name: String,
-    pub base_decimals: u64,
-    pub quote_decimals: u64,
-    pub base_lot_size: u64,
-    pub quote_lot_size: u64,
-    pub bids_key: String,
-    pub asks_key: String,
+pub struct Spec {
+    pub market: String,
+    pub base_decimals: i64,
+    pub quote_decimals: i64,
+    pub base_lot_size: i64,
+    pub quote_lot_size: i64,
+    pub side: String,
+    pub public_key: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     pub bind_ws_addr: String,
     pub source: SourceConfig,
-    pub markets: Vec<MarketConfig>
+    pub specs: Vec<Spec>
 }
 
 #[derive(Clone, Debug)]
 pub struct Snapshot {
-    pub market: String,
-    pub side: String,
+    pub spec: Spec,
     pub orders: Vec<(i64, i64)>,
     pub slot: u64,
     pub write_version: u64
@@ -66,10 +61,25 @@ impl Serialize for Snapshot {
     {
         let mut state = serializer.serialize_struct("Snapshot", 3)?;
 
-        state.serialize_field("market", &self.market)?;
+        state.serialize_field("market", &self.spec.market)?;
         state.serialize_field("type", "l2snapshot")?;
-        state.serialize_field("side", &self.side)?;
-        state.serialize_field("orders", &self.orders)?;
+        state.serialize_field("side", &self.spec.side)?;
+        state.serialize_field(
+            "orders",
+            &self.orders
+                    .iter()
+                    .map(|(price, quantity)| (
+                        price.mul(
+                            (10 as i64)
+                                .pow((&self.spec.base_decimals - &self.spec.quote_decimals) as u32)
+                                .mul(&self.spec.quote_lot_size)
+                        ) as f64 / self.spec.base_lot_size as f64,
+                        quantity.mul(
+                            &self.spec.base_lot_size
+                        ) as f64 / (10 as i64).pow(self.spec.base_decimals as u32) as f64
+                    ))
+                    .collect::<Vec<(f64, f64)>>()
+        );
         state.serialize_field("slot", &self.slot)?;
         state.serialize_field("write_version", &self.write_version)?;
 
@@ -79,17 +89,10 @@ impl Serialize for Snapshot {
 
 #[derive(Clone, Debug)]
 pub struct Delta {
-    pub market: String,
-    pub side: String,
+    pub spec: Spec,
     pub orders: Vec<(i64, i64)>,
     pub slot: u64,
     pub write_version: u64
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Meta {
-    pub market: String,
-    pub side: String
 }
 
 impl Serialize for Delta {
@@ -99,10 +102,16 @@ impl Serialize for Delta {
     {
         let mut state = serializer.serialize_struct("Snapshot", 3)?;
 
-        state.serialize_field("market", &self.market)?;
+        state.serialize_field("market", &self.spec.market)?;
         state.serialize_field("type", "l2update")?;
-        state.serialize_field("side", &self.side)?;
-        state.serialize_field("orders", &self.orders)?;
+        state.serialize_field("side", &self.spec.side)?;
+        state.serialize_field(
+            "orders",
+            &self.orders
+                    // .iter()
+                    // .map(|(price, quantity)| (*price as f64 * self.meta.price_lots_to_ui_convertor, *quantity as f64 * self.meta.base_lots_to_ui_convertor))
+                    // .collect::<Vec<(f64, f64)>>()
+        );
         state.serialize_field("slot", &self.slot)?;
         state.serialize_field("write_version", &self.write_version)?;
 
@@ -129,6 +138,8 @@ async fn main() -> anyhow::Result<()> {
         toml::from_str(&contents).unwrap()
     };
 
+    let config_ref_thread = config.clone();
+
     let metrics_tx = metrics::start();
 
     info!("{:#?}", config);
@@ -140,39 +151,23 @@ async fn main() -> anyhow::Result<()> {
 
     let mut chain_cache = ChainData::new();
 
-    let order_book_side_pks: HashMap<Pubkey, Meta> = config.markets
-        .into_iter()
-        .map(|market_config|
-            [
-                (
-                    Pubkey::from_str(&market_config.bids_key).unwrap(),
-                    Meta { market: market_config.name.clone(), side: "bids".parse().unwrap() }
-                ),
-                (
-                    Pubkey::from_str(&market_config.asks_key).unwrap(),
-                    Meta { market: market_config.name.clone(), side: "asks".parse().unwrap() }
-                )
-            ])
-        .flatten()
-        .collect();
-
     let snapshots: Arc<Mutex<HashMap<String, Snapshot>>> = Arc::new(Mutex::new(HashMap::new()));
+
     let peers: Arc<Mutex<HashMap<SocketAddr, UnboundedSender<Message>>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let snapshots_ref_thread = snapshots.clone();
+
     let peers_ref_thread = peers.clone();
 
-    // TODO:
-    // Figure out how to write to snapshots from within
-    // the thread without having to copy the Arc
+    let mut trails = HashMap::<String, (u64, u64)>::new();
+
+    let relevant_accounts = config.specs.clone().iter().map(|spec| spec.public_key.clone()).collect::<Vec<String>>();
 
     tokio::spawn(async move {
         loop {
             tokio::select! {
                 Ok(account_write) = account_write_queue_receiver.recv() => {
-                    let meta = order_book_side_pks.get(&account_write.pubkey);
-
-                    if let None = meta {
+                    if !relevant_accounts.contains(&account_write.pubkey.to_string()) {
                         continue;
                     }
 
@@ -197,115 +192,6 @@ async fn main() -> anyhow::Result<()> {
                         account_write.pubkey,
                         account_write.write_version
                     );
-
-                    let cache = chain_cache.account(&account_write.pubkey).unwrap();
-
-                    let book_side: &BookSide = bytemuck::from_bytes(cache.account.data());
-
-                    let current_l2_snapshot: Vec<(i64, i64)> = book_side
-                        .iter_valid(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs())
-                        .map(|(node_handle, leaf_node)| (leaf_node.price(), leaf_node.quantity))
-                        .group_by(|(price, quantity)| *price)
-                        .into_iter()
-                        .map(|(price, group)| (price, group.map(|(price, quantity)| quantity).fold(0, |acc, x| acc + x)))
-                        .collect();
-
-                    let mut diff: Vec<(i64, i64)> = vec!();
-
-                    let snapshots_ref_thread_copy = snapshots_ref_thread.lock().unwrap().clone();
-
-                    if let Some(previous_l2_snapshot) = snapshots_ref_thread_copy.get(&account_write.pubkey.to_string()) {
-                        for previous_order in previous_l2_snapshot.orders.iter() {
-                            let (previous_order_price, previous_order_size) = *previous_order;
-
-                            let peer = current_l2_snapshot
-                                .iter()
-                                .find(|&(current_order_price, current_order_size)| previous_order_price == *current_order_price);
-
-                            match peer {
-                                None => diff.push((previous_order_price, 0)),
-                                _ => continue
-                            }
-                        }
-
-                        for current_order in &current_l2_snapshot {
-                            let (current_order_price, current_order_size) = *current_order;
-
-                            let peer = previous_l2_snapshot
-                                .orders
-                                .iter()
-                                .find(|&(previous_order_price, previous_order_size)| *previous_order_price == current_order_price);
-
-                            match peer {
-                                Some(previous_order) => {
-                                    let (previous_order_price, previous_order_size) = previous_order;
-
-                                    if *previous_order_size == current_order_size {
-                                        continue;
-                                    }
-
-                                    diff.push(current_order.clone());
-                                },
-                                None => diff.push(current_order.clone())
-                            }
-                        }
-                    }
-
-                    // let base_decimals = 9 as f64;
-                    //
-                    // let quote_decimals = 6 as f64;
-                    //
-                    // let quote_lot_size = 100 as f64;
-                    //
-                    // let base_lot_size = 10000000 as f64;
-                    //
-                    // let price_lots_to_ui_convertor = (10 as f64)
-                    //     .powf(base_decimals - quote_decimals)
-                    //     * quote_lot_size
-                    //     / base_lot_size;
-                    //
-                    // let base_lots_to_ui_convertor = base_lot_size / (10 as f64).powf(base_decimals);
-                    //
-                    // println!(
-                    //     "{:#?}",
-                    //     diff.iter().map(|(price, quantity)| (*price as f64 * price_lots_to_ui_convertor, *quantity as f64 * base_lots_to_ui_convertor)).collect::<Vec<(f64, f64)>>()
-                    // );
-
-                    snapshots_ref_thread
-                        .lock()
-                        .unwrap()
-                        .insert(
-                            account_write.pubkey.to_string(),
-                            Snapshot {
-                                market: meta.unwrap().market.clone(),
-                                side: meta.unwrap().side.clone(),
-                                orders: current_l2_snapshot.clone(),
-                                slot: cache.slot,
-                                write_version: cache.write_version
-                            }
-                        );
-
-                    let mut ref_copy = peers_ref_thread.lock().unwrap().clone();
-
-                    for (sock_addr, channel) in ref_copy.iter_mut() {
-                        trace!("  > {}", sock_addr);
-
-                        let delta = Delta {
-                            market: meta.unwrap().market.clone(),
-                            side: meta.unwrap().side.clone(),
-                            orders: diff.clone(),
-                            slot: cache.slot,
-                            write_version: cache.write_version
-                        };
-
-                        let json = serde_json::to_string(&delta);
-
-                        let result = channel.send(Message::Text(json.unwrap())).await;
-
-                        if result.is_err() {
-                            error!("ws update error",)
-                        }
-                    }
                 }
                 Ok(slot_update) = slot_queue_receiver.recv() => {
                     chain_cache.update_slot(SlotData {
@@ -316,6 +202,117 @@ async fn main() -> anyhow::Result<()> {
                     });
                 }
             };
+
+            for spec in config_ref_thread.specs.iter() {
+                let key = Pubkey::from_str(&spec.public_key).unwrap();
+
+                let try_cache = chain_cache.account(&key);
+
+                if try_cache.is_err() {
+                    continue;
+                }
+
+                let cache = try_cache.unwrap();
+
+                let meta = (cache.slot, cache.write_version);
+
+                let trail = trails.get(&spec.market).unwrap_or(&(0, 0));
+
+                if *trail == meta {
+                    continue;
+                }
+
+                trails.insert(key.to_string().clone(), meta);
+
+                let book_side: &BookSide = bytemuck::from_bytes(cache.account.data());
+
+                let current_l2_snapshot: Vec<(i64, i64)> = book_side
+                    .iter_valid(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs())
+                    .map(|(node_handle, leaf_node)| (leaf_node.price(), leaf_node.quantity))
+                    .group_by(|(price, quantity)| *price)
+                    .into_iter()
+                    .map(|(price, group)| (price, group.map(|(price, quantity)| quantity).fold(0, |acc, x| acc + x)))
+                    .collect();
+
+                let mut diff: Vec<(i64, i64)> = vec!();
+
+                let snapshots_ref_thread_copy = snapshots_ref_thread.lock().unwrap().clone();
+
+                if let Some(previous_l2_snapshot) = snapshots_ref_thread_copy.get(&key.to_string()) {
+                    for previous_order in previous_l2_snapshot.orders.iter() {
+                        let (previous_order_price, previous_order_size) = *previous_order;
+
+                        let peer = current_l2_snapshot
+                            .iter()
+                            .find(|&(current_order_price, current_order_size)| previous_order_price == *current_order_price);
+
+                        match peer {
+                            None => diff.push((previous_order_price, 0)),
+                            _ => continue
+                        }
+                    }
+
+                    for current_order in &current_l2_snapshot {
+                        let (current_order_price, current_order_size) = *current_order;
+
+                        let peer = previous_l2_snapshot
+                            .orders
+                            .iter()
+                            .find(|&(previous_order_price, previous_order_size)| *previous_order_price == current_order_price);
+
+                        match peer {
+                            Some(previous_order) => {
+                                let (previous_order_price, previous_order_size) = previous_order;
+
+                                if *previous_order_size == current_order_size {
+                                    continue;
+                                }
+
+                                diff.push(current_order.clone());
+                            },
+                            None => diff.push(current_order.clone())
+                        }
+                    }
+                }
+
+                snapshots_ref_thread
+                    .lock()
+                    .unwrap()
+                    .insert(
+                        key.to_string(),
+                        Snapshot {
+                            spec: spec.clone(),
+                            orders: current_l2_snapshot.clone(),
+                            slot: cache.slot,
+                            write_version: cache.write_version
+                        }
+                    );
+
+                let mut ref_copy = peers_ref_thread.lock().unwrap().clone();
+
+                if diff.len() == 0 {
+                    continue
+                }
+
+                for (sock_addr, channel) in ref_copy.iter_mut() {
+                    trace!("  > {}", sock_addr);
+
+                    let delta = Delta {
+                        spec: spec.clone(),
+                        orders: diff.clone(),
+                        slot: cache.slot,
+                        write_version: cache.write_version
+                    };
+
+                    let json = serde_json::to_string(&delta);
+
+                    let result = channel.send(Message::Text(json.unwrap())).await;
+
+                    if result.is_err() {
+                        error!("ws update error",)
+                    }
+                }
+            }
         }
     });
 
