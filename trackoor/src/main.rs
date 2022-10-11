@@ -108,9 +108,18 @@ impl Serialize for Delta {
         state.serialize_field(
             "orders",
             &self.orders
-                    // .iter()
-                    // .map(|(price, quantity)| (*price as f64 * self.meta.price_lots_to_ui_convertor, *quantity as f64 * self.meta.base_lots_to_ui_convertor))
-                    // .collect::<Vec<(f64, f64)>>()
+                .iter()
+                .map(|(price, quantity)| (
+                    price.mul(
+                        (10 as i64)
+                            .pow((&self.spec.base_decimals - &self.spec.quote_decimals) as u32)
+                            .mul(&self.spec.quote_lot_size)
+                    ) as f64 / self.spec.base_lot_size as f64,
+                    quantity.mul(
+                        &self.spec.base_lot_size
+                    ) as f64 / (10 as i64).pow(self.spec.base_decimals as u32) as f64
+                ))
+                .collect::<Vec<(f64, f64)>>()
         );
         state.serialize_field("slot", &self.slot)?;
         state.serialize_field("write_version", &self.write_version)?;
