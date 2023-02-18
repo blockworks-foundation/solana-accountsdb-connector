@@ -1,9 +1,9 @@
 mod blockhash_poller;
+mod mango_v3_perp_crank_sink;
 mod mango_v4_perp_crank_sink;
 mod openbook_crank_sink;
 mod transaction_builder;
 mod transaction_sender;
-
 
 use anchor_client::{
     solana_sdk::{commitment_config::CommitmentConfig, signature::Keypair},
@@ -29,6 +29,37 @@ pub struct Config {
     pub rpc_http_url: String,
     pub mango_group: String,
     pub keypair: Vec<u8>,
+    pub v3_markets: Vec<(String, String)>,
+    pub v3_group: (String, String, String),
+}
+
+async fn fetch_openbook_evq_pks(
+    rpc_client: Arc<RpcClient>,
+    serum_market_pks: &Vec<Pubkey>,
+) -> anyhow::Result<Vec<(Pubkey, Pubkey)>> {
+    let serum_market_ais = rpc_client
+        .get_multiple_accounts(serum_market_pks.as_slice())
+        .await?;
+
+    let serum_market_ais: Vec<_> = serum_market_ais
+        .iter()
+        .filter_map(|maybe_ai| match maybe_ai {
+            Some(ai) => Some(ai),
+            None => None,
+        })
+        .collect();
+
+    Ok(serum_market_ais
+        .iter()
+        .enumerate()
+        .map(|pair| {
+            let market_state: serum_dex::state::MarketState = *bytemuck::from_bytes(
+                &pair.1.data[5..5 + std::mem::size_of::<serum_dex::state::MarketState>()],
+            );
+            let event_q = market_state.event_q;
+            (serum_market_pks[pair.0], Pubkey::new(bytes_of(&event_q)))
+        })
+        .collect())
 }
 
 #[tokio::main]
@@ -65,11 +96,11 @@ async fn main() -> anyhow::Result<()> {
         Some(rpc_timeout),
         0,
     );
-    let group_pk = Pubkey::from_str(&config.mango_group).unwrap();
+    let v4_group_pk = Pubkey::from_str(&config.mango_group).unwrap();
     let group_context =
-        Arc::new(MangoGroupContext::new_from_rpc(&client.rpc_async(), group_pk).await?);
+        Arc::new(MangoGroupContext::new_from_rpc(&client.rpc_async(), v4_group_pk).await?);
 
-    let perp_queue_pks: Vec<_> = group_context
+    let v4_perp_market_pks: Vec<_> = group_context
         .perp_markets
         .iter()
         .map(|(_, context)| (context.address, context.market.event_queue))
@@ -82,38 +113,26 @@ async fn main() -> anyhow::Result<()> {
         .map(|(_, context)| context.market.serum_market_external)
         .collect();
 
-    let serum_market_ais = client
-        .rpc_async()
-        .get_multiple_accounts(serum_market_pks.as_slice())
-        .await?;
+    let openbook_pks: Vec<_> =
+        fetch_openbook_evq_pks(rpc_client.clone(), &serum_market_pks).await.expect("fetch serum evq pks");
 
-    let serum_market_ais: Vec<_> = serum_market_ais
-        .iter()
-        .filter_map(|maybe_ai| match maybe_ai {
-            Some(ai) => Some(ai),
-            None => None,
-        })
-        .collect();
-
-    let serum_queue_pks: Vec<_> = serum_market_ais
-        .iter()
-        .enumerate()
-        .map(|pair| {
-            let market_state: serum_dex::state::MarketState = *bytemuck::from_bytes(
-                &pair.1.data[5..5 + std::mem::size_of::<serum_dex::state::MarketState>()],
-            );
-            let event_q = market_state.event_q;
-            (serum_market_pks[pair.0], Pubkey::new(bytes_of(&event_q)))
-        })
-        .collect();
+    let v3_perp_market_pks: Vec<_> = config.v3_markets.iter().map(|c| {(Pubkey::from_str(&c.0).unwrap(),Pubkey::from_str(&c.1).unwrap(),)}).collect();
+    let v3_group_pks = (
+        Pubkey::from_str(&config.v3_group.0).unwrap(),
+        Pubkey::from_str(&config.v3_group.1).unwrap(),
+        Pubkey::from_str(&config.v3_group.2).unwrap(),
+    );
 
     let (account_write_queue_sender, slot_queue_sender, instruction_receiver) =
         transaction_builder::init(
-            perp_queue_pks.clone(),
-            serum_queue_pks.clone(),
-            group_pk,
+            v4_perp_market_pks.clone(),
+            v3_perp_market_pks,
+            openbook_pks.clone(),
+            v4_group_pk,
+            v3_group_pks,
             metrics_tx.clone(),
         )
+        .await
         .expect("init transaction builder");
 
     transaction_sender::init(
@@ -133,9 +152,9 @@ async fn main() -> anyhow::Result<()> {
             .collect::<String>()
     );
     let use_geyser = true;
-    let all_queue_pks: HashSet<Pubkey> = perp_queue_pks
+    let all_queue_pks: HashSet<Pubkey> = v4_perp_market_pks
         .iter()
-        .chain(serum_queue_pks.iter())
+        .chain(openbook_pks.iter())
         .map(|mkt| mkt.1)
         .collect();
 

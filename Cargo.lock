@@ -3041,6 +3041,66 @@ dependencies = [
 ]
 
 [[package]]
+name = "mango"
+version = "3.7.0"
+source = "git+https://github.com/blockworks-foundation/mango-v3#c4d52dc7f08e9ba4ae13728d0a2f1c298c0c4a86"
+dependencies = [
+ "anchor-lang",
+ "arrayref",
+ "bincode",
+ "bs58 0.4.0",
+ "bytemuck",
+ "enumflags2",
+ "fixed",
+ "fixed-macro",
+ "mango-common",
+ "mango-logs",
+ "mango-macro",
+ "num_enum",
+ "pyth-client",
+ "safe-transmute",
+ "serde",
+ "serum_dex 0.5.5",
+ "solana-program",
+ "spl-token",
+ "static_assertions",
+ "switchboard-program",
+ "switchboard-utils",
+ "thiserror",
+]
+
+[[package]]
+name = "mango-common"
+version = "3.0.0"
+source = "git+https://github.com/blockworks-foundation/mango-v3#c4d52dc7f08e9ba4ae13728d0a2f1c298c0c4a86"
+dependencies = [
+ "bytemuck",
+ "solana-program",
+]
+
+[[package]]
+name = "mango-logs"
+version = "0.1.0"
+source = "git+https://github.com/blockworks-foundation/mango-v3#c4d52dc7f08e9ba4ae13728d0a2f1c298c0c4a86"
+dependencies = [
+ "anchor-lang",
+ "base64 0.13.1",
+]
+
+[[package]]
+name = "mango-macro"
+version = "3.0.0"
+source = "git+https://github.com/blockworks-foundation/mango-v3#c4d52dc7f08e9ba4ae13728d0a2f1c298c0c4a86"
+dependencies = [
+ "bytemuck",
+ "mango-common",
+ "quote 1.0.23",
+ "safe-transmute",
+ "solana-program",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "mango-v4"
 version = "0.6.0"
 source = "git+https://github.com/blockworks-foundation/mango-v4?branch=dev#0ba7ecd5061e666addd90e6d3a4293ec1381f9c0"
@@ -4172,6 +4232,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyth-client"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "398f9e51e126a13903254c56f75b3201583db075d0fbb77e931f7515af9b3d16"
+dependencies = [
+ "borsh",
+ "borsh-derive",
+ "bytemuck",
+ "num-derive",
+ "num-traits",
+ "serde",
+ "solana-program",
+ "thiserror",
+]
+
+[[package]]
 name = "pyth-sdk"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5115,6 +5191,29 @@ dependencies = [
 
 [[package]]
 name = "serum_dex"
+version = "0.5.5"
+source = "git+https://github.com/blockworks-foundation/serum-dex.git?rev=7f55a5ef5f7937b74381a3124021a261cd7d7283#7f55a5ef5f7937b74381a3124021a261cd7d7283"
+dependencies = [
+ "arrayref",
+ "bincode",
+ "bytemuck",
+ "byteorder",
+ "enumflags2",
+ "field-offset",
+ "itertools 0.9.0",
+ "num-traits",
+ "num_enum",
+ "safe-transmute",
+ "serde",
+ "solana-program",
+ "spl-token",
+ "static_assertions",
+ "thiserror",
+ "without-alloc",
+]
+
+[[package]]
+name = "serum_dex"
 version = "0.5.6"
 source = "git+https://github.com/blockworks-foundation/serum-dex.git?branch=ckamm/find_by_key#c0b9f559daa74ec5960cc371a8bed610029a656b"
 dependencies = [
@@ -5219,6 +5318,7 @@ dependencies = [
  "anchor-client",
  "anchor-lang",
  "anyhow",
+ "arrayref",
  "async-channel",
  "async-trait",
  "bs58 0.3.1",
@@ -5227,6 +5327,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "log 0.3.9",
+ "mango",
  "mango-v4",
  "serde",
  "serde_derive",

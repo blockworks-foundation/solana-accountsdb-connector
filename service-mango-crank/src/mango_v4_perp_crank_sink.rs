@@ -7,6 +7,7 @@ use std::{
 use async_channel::Sender;
 use async_trait::async_trait;
 use log::*;
+use mango_v4::state::{EventQueue, EventType, FillEvent, OutEvent};
 use solana_geyser_connector_lib::{
     account_write_filter::AccountWriteSink, chain_data::AccountData,
 };
@@ -17,7 +18,6 @@ use solana_sdk::{
 };
 
 use bytemuck::cast_ref;
-use mango_v4::state::FillEvent;
 
 use anchor_lang::AccountDeserialize;
 
@@ -43,13 +43,12 @@ impl MangoV4PerpCrankSink {
 impl AccountWriteSink for MangoV4PerpCrankSink {
     async fn process(&self, pk: &Pubkey, account: &AccountData) -> Result<(), String> {
         let account = &account.account;
-        let event_queue: mango_v4::state::EventQueue =
-            mango_v4::state::EventQueue::try_deserialize(account.data().borrow_mut()).unwrap();
+        let event_queue: EventQueue = EventQueue::try_deserialize(account.data().borrow_mut()).unwrap();
 
         // only crank if at least 1 fill or a sufficient events of other categories are buffered
         let contains_fill_events = event_queue
             .iter()
-            .find(|e| e.event_type == mango_v4::state::EventType::Fill as u8)
+            .find(|e| e.event_type == EventType::Fill as u8)
             .is_some();
         let has_backlog = event_queue.iter().count() > MAX_BACKLOG;
         if !contains_fill_events && !has_backlog {
@@ -60,16 +59,16 @@ impl AccountWriteSink for MangoV4PerpCrankSink {
             .iter()
             .take(10)
             .flat_map(|e| {
-                match mango_v4::state::EventType::try_from(e.event_type).expect("mango v4 event") {
-                    mango_v4::state::EventType::Fill => {
-                        let fill: &mango_v4::state::FillEvent = cast_ref(e);
+                match EventType::try_from(e.event_type).expect("mango v4 event") {
+                    EventType::Fill => {
+                        let fill: &FillEvent = cast_ref(e);
                         vec![fill.maker, fill.taker]
                     }
-                    mango_v4::state::EventType::Out => {
-                        let out: &mango_v4::state::OutEvent = cast_ref(e);
+                    EventType::Out => {
+                        let out: &OutEvent = cast_ref(e);
                         vec![out.owner]
                     }
-                    mango_v4::state::EventType::Liquidate => vec![],
+                    EventType::Liquidate => vec![],
                 }
             })
             .collect();

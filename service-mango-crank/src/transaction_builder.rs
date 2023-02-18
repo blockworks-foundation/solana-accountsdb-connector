@@ -1,40 +1,23 @@
-use bytemuck::cast_ref;
-use mango_v4::state::FillEvent;
-use serum_dex::{instruction::MarketInstruction, state::EventView};
+use crate::{
+    mango_v3_perp_crank_sink::MangoV3PerpCrankSink, mango_v4_perp_crank_sink::MangoV4PerpCrankSink,
+    openbook_crank_sink::OpenbookCrankSink,
+};
 use solana_geyser_connector_lib::{
     account_write_filter::{self, AccountWriteRoute},
-    chain_data::{AccountData, ChainData, SlotData},
     metrics::Metrics,
-    serum::SerumEventQueueHeader,
     AccountWrite, SlotUpdate,
 };
+use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
+use std::{sync::Arc, time::Duration};
 
-use anchor_lang::AccountDeserialize;
-use log::*;
-use solana_sdk::{
-    account::{ReadableAccount, WritableAccount},
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-    stake_history::Epoch,
-};
-use std::{
-    borrow::BorrowMut,
-    collections::{BTreeSet, HashMap, HashSet},
-    convert::TryFrom,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
-use crate::{openbook_crank_sink::OpenbookCrankSink, mango_v4_perp_crank_sink::MangoV4PerpCrankSink};
-
-const MAX_BACKLOG: usize = 2;
 const TIMEOUT_INTERVAL: Duration = Duration::from_millis(400);
 
-pub fn init(
-    perp_queue_pks: Vec<(Pubkey, Pubkey)>,
-    serum_queue_pks: Vec<(Pubkey, Pubkey)>,
-    group_pk: Pubkey,
+pub async fn init(
+    v4_perp_market_pks: Vec<(Pubkey, Pubkey)>,
+    v3_perp_market_pks: Vec<(Pubkey, Pubkey)>,
+    openbook_pks: Vec<(Pubkey, Pubkey)>,
+    v4_group_pk: Pubkey,
+    v3_group_pks: (Pubkey, Pubkey, Pubkey),
     metrics_sender: Metrics,
 ) -> anyhow::Result<(
     async_channel::Sender<AccountWrite>,
@@ -46,24 +29,38 @@ pub fn init(
 
     let routes = vec![
         AccountWriteRoute {
-            matched_pubkeys: serum_queue_pks
+            matched_pubkeys: openbook_pks
                 .iter()
                 .map(|(_, evq_pk)| evq_pk.clone())
                 .collect(),
             sink: Arc::new(OpenbookCrankSink::new(
-                serum_queue_pks,
+                openbook_pks,
+                instruction_sender.clone(),
+            )),
+            timeout_interval: TIMEOUT_INTERVAL,
+        },
+        AccountWriteRoute {
+            matched_pubkeys: v3_perp_market_pks
+                .iter()
+                .map(|(_, evq_pk)| evq_pk.clone())
+                .collect(),
+            sink: Arc::new(MangoV3PerpCrankSink::new(
+                v3_perp_market_pks,
+                v3_group_pks.0,
+                v3_group_pks.1,
+                v3_group_pks.2,
                 instruction_sender.clone(),
             )),
             timeout_interval: Duration::default(),
         },
         AccountWriteRoute {
-            matched_pubkeys: perp_queue_pks
+            matched_pubkeys: v4_perp_market_pks
                 .iter()
                 .map(|(_, evq_pk)| evq_pk.clone())
                 .collect(),
             sink: Arc::new(MangoV4PerpCrankSink::new(
-                perp_queue_pks,
-                group_pk,
+                v4_perp_market_pks,
+                v4_group_pk,
                 instruction_sender.clone(),
             )),
             timeout_interval: Duration::default(),
