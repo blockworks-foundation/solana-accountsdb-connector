@@ -2,9 +2,9 @@ use crate::{
     chain_data::{AccountData, ChainData, SlotData},
     metrics::{MetricType, Metrics},
     orderbook_filter::{base_lots_to_ui_perp, price_lots_to_ui_perp, MarketConfig, OrderbookSide},
-    AccountWrite, SlotUpdate,
+    AccountWrite, SlotUpdate, serum::SerumEventQueueHeader,
 };
-use bytemuck::{cast_slice, Pod, Zeroable};
+use bytemuck::{cast_slice};
 use chrono::{TimeZone, Utc};
 use log::*;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
@@ -244,17 +244,6 @@ pub struct FillUpdate {
     pub slot: u64,
     pub write_version: u64,
 }
-
-#[derive(Copy, Clone, Debug)]
-#[repr(packed)]
-pub struct SerumEventQueueHeader {
-    _account_flags: u64, // Initialized, EventQueue
-    _head: u64,
-    count: u64,
-    seq_num: u64,
-}
-unsafe impl Zeroable for SerumEventQueueHeader {}
-unsafe impl Pod for SerumEventQueueHeader {}
 
 impl Serialize for FillUpdate {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
